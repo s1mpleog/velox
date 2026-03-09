@@ -5,10 +5,12 @@ edition = "2024"
 
 [dependencies]
 axum = { version = "0.8.8", features = ["macros"] }
+axum-extra = { version = "0.12.5", features = ["cookie"] }
 chrono = { version = "0.4.44", features = ["serde"] }
+cookie = "0.18.1"
 dotenvy = "0.15.7"
 hex = "0.4.3"
-jsonwebtokens = "1.2.0"
+jsonwebtoken = { version = "10.3.0", features = ["aws_lc_rs"] }
 lettre = "0.11.19"
 rand = { version = "0.10.0" }
 resend-rs = "0.21.1"

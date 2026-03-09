@@ -6,3 +6,8 @@ pub struct LoginRequest {
     #[validate(email(message = "Invalid email format"))]
     pub email: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct AuthorizeQuery {
+    pub token: String,
+}
