@@ -1,6 +1,9 @@
 use sqlx::PgConnection;
 
-use crate::{error::VeloxError, models};
+use crate::{
+    error::VeloxError,
+    models::{self, magic_token_model::MagicToken},
+};
 
 pub struct MagicTokenRepository {}
 
@@ -30,5 +33,16 @@ impl MagicTokenRepository {
             .map_err(VeloxError::SqlxError)?;
 
         Ok(())
+    }
+
+    pub async fn find_by_token(
+        tx: &mut PgConnection,
+        token: &str,
+    ) -> Result<Option<MagicToken>, VeloxError> {
+        sqlx::query_as::<_, MagicToken>("SELECT * FROM magic_tokens WHERE token = $1")
+            .bind(token)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(VeloxError::SqlxError)
     }
 }

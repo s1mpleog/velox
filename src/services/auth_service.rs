@@ -83,8 +83,8 @@ impl AuthService {
 
             TempUserRepository::upsert(&mut tx, email).await?;
 
+            //TODO: make sure to remove these when pushing to production
             tracing::info!("Generated random token: {}", token);
-
             tracing::info!("Sha 256 token: {}", token_sha256);
 
             MagicTokenRepository::insert(&mut tx, &token_sha256, email, ResponseType::SignIn)
@@ -98,5 +98,50 @@ impl AuthService {
         Ok(())
     }
 
-    pub async fn authorize(pool: &Pool<Postgres>, raw_token: &str) {}
+    pub async fn authorize(pool: &Pool<Postgres>, raw_token: &str) -> Result<(), VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+
+        // hash the raw token Sha256
+        // we will get token in url like token?=raw_token
+        // handler will give us the extracted token
+        // query the magic_token table with the token
+        // check if exists or not if not send message saying your token is expired
+        // or else check the request type if its a login or sign in
+        // if login then create the jwt and cookie and login the user
+        // ig signin the first promote the temp_user to user table and create jwt and cookies
+        // make sure to delete both magic_token and temp_user if type == signin
+
+        let hashed_token = AuthService::generate_sha256(raw_token);
+
+        let magic_token = MagicTokenRepository::find_by_token(&mut tx, &hashed_token)
+            .await?
+            .ok_or(VeloxError::InvalidToken)?;
+
+        if magic_token.expires_at < chrono::Utc::now() {
+            return Err(VeloxError::InvalidToken);
+        }
+
+        match magic_token.kind {
+            ResponseType::SignIn => {
+                let temp_user = TempUserRepository::find_by_email(&mut tx, &magic_token.email)
+                    .await?
+                    .ok_or(VeloxError::InvalidToken)?;
+
+                UserRepository::insert(&mut tx, &temp_user.email).await?;
+                TempUserRepository::delete_by_email(&mut tx, &temp_user.email).await?;
+                MagicTokenRepository::delete_by_email(&mut tx, &magic_token.email).await?;
+            }
+            ResponseType::LogIn => {
+                let user = UserRepository::find_by_email(&mut tx, &magic_token.email)
+                    .await?
+                    .ok_or(VeloxError::NotFound)?;
+
+                MagicTokenRepository::delete_by_email(&mut tx, &magic_token.email).await?;
+            }
+        }
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+
+        Ok(())
+    }
 }

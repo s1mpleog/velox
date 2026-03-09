@@ -15,4 +15,14 @@ impl UserRepository {
             .await
             .map_err(VeloxError::SqlxError)
     }
+
+    pub async fn insert(tx: &mut PgConnection, email: &str) -> Result<(), VeloxError> {
+        sqlx::query("INSERT INTO users (email) VALUES = ($1)")
+            .bind(email)
+            .execute(tx)
+            .await
+            .map_err(VeloxError::SqlxError)?;
+
+        Ok(())
+    }
 }
