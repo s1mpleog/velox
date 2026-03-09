@@ -1,0 +1,31 @@
+[package]
+name = "velox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = { version = "0.8.8", features = ["macros"] }
+chrono = { version = "0.4.44", features = ["serde"] }
+dotenvy = "0.15.7"
+hex = "0.4.3"
+jsonwebtokens = "1.2.0"
+lettre = "0.11.19"
+rand = { version = "0.10.0" }
+resend-rs = "0.21.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+sha2 = "0.10.9"
+sqlx = { version = "0.8.6", features = [
+  "runtime-tokio",
+  "tls-rustls-ring-webpki",
+  "postgres",
+  "uuid",
+  "chrono",
+] }
+
+thiserror = "2.0.18"
+tokio = { version = "1.50.0", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+uuid = { version = "1.22.0", features = ["v4", "serde"] }
+validator = { version = "0.20.0", features = ["derive"] }
