@@ -1,9 +1,10 @@
 use axum::{
-    Extension,
-    extract::{Multipart, State},
+    Extension, Json,
+    extract::{Multipart, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{app_state::AppState, error::VeloxError, services::file_service::FileService};
@@ -19,8 +20,6 @@ impl FileHandler {
         let mut files: Vec<(String, String, Vec<u8>)> = Vec::new();
         let mut folder_id: Option<Uuid> = None;
 
-        tracing::debug!("reached here?");
-
         while let Some(field) = multipart
             .next_field()
             .await
@@ -33,11 +32,7 @@ impl FileHandler {
                 .unwrap_or("application/octet-stream")
                 .to_string();
 
-            tracing::info!("before data");
-
             let data = field.bytes().await.map_err(|_| VeloxError::InternalError)?;
-
-            tracing::info!("after data");
 
             if name == "file" {
                 files.push((file_name, content_type, data.to_vec()));
@@ -51,8 +46,6 @@ impl FileHandler {
             }
         }
 
-        tracing::debug!("after loop before upload service here?");
-
         FileService::upload(
             &state.pool,
             &state.r2,
@@ -63,5 +56,16 @@ impl FileHandler {
         .await?;
 
         Ok((StatusCode::OK, "File uploaded successfully"))
+    }
+
+    pub async fn download(
+        State(state): State<AppState>,
+        Extension(user_email): Extension<String>,
+        Path(file_id): Path<Uuid>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        let presigned =
+            FileService::download(&state.pool, &state.r2, &user_email, &file_id).await?;
+        let url = Json(json!({"url": presigned.uri().to_string() }));
+        Ok((StatusCode::OK, url))
     }
 }
