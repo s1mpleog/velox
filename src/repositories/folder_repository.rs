@@ -69,4 +69,23 @@ impl FolderRepository {
 
         Ok(())
     }
+
+    pub async fn delete(
+        tx: &mut PgConnection,
+        folder_id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<(), VeloxError> {
+        let result = sqlx::query("DELETE from folders WHERE id = $1 AND user_id = $2")
+            .bind(folder_id)
+            .bind(user_id)
+            .execute(tx)
+            .await
+            .map_err(VeloxError::SqlxError)?;
+
+        if result.rows_affected() == 0 {
+            return Err(VeloxError::NotFound);
+        }
+
+        Ok(())
+    }
 }

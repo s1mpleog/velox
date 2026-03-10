@@ -63,4 +63,21 @@ impl FolderService {
 
         Ok(())
     }
+
+    pub async fn delete(
+        pool: &Pool<Postgres>,
+        user_email: &str,
+        folder_id: &Uuid,
+    ) -> Result<(), VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+
+        let user = UserRepository::find_by_email(&mut tx, user_email)
+            .await?
+            .ok_or(VeloxError::NotFound)?;
+
+        FolderRepository::delete(&mut tx, folder_id, &user.id).await?;
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+        Ok(())
+    }
 }

@@ -43,4 +43,13 @@ impl FolderHandler {
 
         Ok((StatusCode::OK, "Folder rename successfully"))
     }
+
+    pub async fn delete(
+        State(state): State<AppState>,
+        Path(folder_id): Path<Uuid>,
+        Extension(user_email): Extension<String>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        FolderService::delete(&state.pool, &user_email, &folder_id).await?;
+        Ok((StatusCode::OK, "Folder deleted successfully"))
+    }
 }

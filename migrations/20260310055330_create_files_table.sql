@@ -7,6 +7,6 @@ CREATE TABLE files(
   url TEXT NOT NULL,
   file_type VARCHAR(100) NOT NULL,
   size BIGINT NOT NULL,
-  folder_id UUID REFERENCES folders(id),
+  folder_id UUID REFERENCES folders(id) ON DELETE CASCADE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
