@@ -35,6 +35,7 @@ async fn main() -> Result<(), VeloxError> {
     let app = Router::new()
         .route("/ping", get(ping))
         .nest("/auth", routes::auth_route::auth_route(app_state.clone()))
+        .nest("/folders", routes::folder_route::folder_route())
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
