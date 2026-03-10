@@ -2,6 +2,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::json;
 
+use crate::storage::init_r2;
 use crate::{error::VeloxError, utils::Utils};
 
 pub mod database;
@@ -14,6 +15,7 @@ pub mod models;
 pub mod repositories;
 pub mod routes;
 pub mod services;
+pub mod storage;
 pub mod utils;
 
 pub mod app_state;
@@ -30,12 +32,15 @@ async fn main() -> Result<(), VeloxError> {
 
     let pool = connect::connect_db(&database_url).await?;
 
-    let app_state = app_state::AppState { pool };
+    let r2 = init_r2().await?;
+
+    let app_state = app_state::AppState { pool, r2 };
 
     let app = Router::new()
         .route("/ping", get(ping))
         .nest("/auth", routes::auth_route::auth_route(app_state.clone()))
         .nest("/folders", routes::folder_route::folder_route())
+        .nest("/files", routes::file_route::file_route())
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
