@@ -25,7 +25,7 @@ impl AuthHandler {
 
         // tracing::debug!("{:?}", login.err());
 
-        Ok((StatusCode::OK, "user logged in successfully"))
+        Ok((StatusCode::OK, "magic link sent to your email"))
     }
 
     pub async fn authorize(
@@ -65,5 +65,45 @@ impl AuthHandler {
         let jar = jar.add(access_token_cookie).add(refresh_token_cookie);
 
         Ok((jar, (StatusCode::OK, "authorized successfully")))
+    }
+
+    pub async fn refresh(
+        State(state): State<AppState>,
+        jar: CookieJar,
+    ) -> Result<(CookieJar, impl IntoResponse), VeloxError> {
+        let refresh_token = jar.get("refresh_token").ok_or(VeloxError::AuthError)?;
+        let refresh_token_to_string = refresh_token.value().to_string();
+
+        let access_token = AuthService::refresh(&state.pool, &refresh_token_to_string).await?;
+
+        let access_token_expires = cookie::time::Duration::minutes(15);
+
+        let access_token_cookie = Cookie::build(("access_token", access_token))
+            .path("/")
+            .http_only(true)
+            .secure(true)
+            .same_site(cookie::SameSite::Lax)
+            .max_age(access_token_expires)
+            .build();
+
+        let jar = jar.add(access_token_cookie);
+
+        Ok((jar, (StatusCode::OK, "successfully generated access_token")))
+    }
+
+    pub async fn logout(
+        State(state): State<AppState>,
+        jar: CookieJar,
+    ) -> Result<(CookieJar, impl IntoResponse), VeloxError> {
+        let refresh_token = jar.get("refresh_token").ok_or(VeloxError::AuthError)?;
+        let refresh_token_to_string = refresh_token.value().to_string();
+
+        AuthService::logout(&state.pool, &refresh_token_to_string).await?;
+
+        let jar = jar
+            .remove(Cookie::from("access_token"))
+            .remove(Cookie::from("refresh_token"));
+
+        Ok((jar, (StatusCode::OK, "user logged out successfully")))
     }
 }

@@ -3,8 +3,8 @@
 CREATE TYPE token_type AS ENUM ('signin', 'login');
 
 CREATE TABLE magic_tokens (
-  token TEXT PRIMARY KEY,
-  email VARCHAR(100) UNIQUE NOT NULL,
+  token text primary key,
+  email varchar(100) unique not null,
   kind token_type,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP + INTERVAL '5 minutes'

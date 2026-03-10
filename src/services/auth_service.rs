@@ -55,7 +55,7 @@ impl AuthService {
             .map_err(|_| VeloxError::InternalError)
     }
 
-    fn verify_access_token(token: &str) -> Result<Claims, VeloxError> {
+    pub fn verify_access_token(token: &str) -> Result<Claims, VeloxError> {
         let secret = Utils::load_env("JWT_SECRET")?;
         let key = secret.as_bytes();
 
@@ -116,9 +116,16 @@ impl AuthService {
     }
 
     pub async fn login(pool: &Pool<Postgres>, email: &str) -> Result<(), VeloxError> {
+        // tracing::debug!("before tx begin");
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
 
+        // tracing::debug!("after tx");
+
         let is_user_exists = UserRepository::find_by_email(&mut tx, email).await?;
+
+        // tracing::warn!("error: {:?}", is_user_exists.as_ref().err());
+
+        // tracing::debug!("after user find by email;");
 
         // we will send this in user email
         let token = AuthService::generate_random_token();
@@ -126,10 +133,15 @@ impl AuthService {
         let token_sha256 = AuthService::generate_sha256(&token);
 
         if let Some(user) = is_user_exists {
+            // tracing::debug!("user exists");
             MagicTokenRepository::delete_by_email(&mut tx, email).await?;
+
+            // tracing::debug!("after magic token delete_by_email");
 
             MagicTokenRepository::insert(&mut tx, &token_sha256, email, ResponseType::LogIn)
                 .await?;
+
+            // tracing::debug!("after magic token insert");
 
             AuthService::send_mail(ResponseType::LogIn, email, &token).await?;
         } else {
@@ -193,10 +205,8 @@ impl AuthService {
                 (access_token, refresh_token) =
                     AuthService::create_session(&mut tx, &temp_user.email, user.id).await?;
 
-                tracing::info!("Access_token: {access_token}");
-                tracing::info!("Refresh_token: {refresh_token}");
-
-                // return the refresh and access token to handler and add it to cookies
+                // tracing::info!("Access_token: {access_token}");
+                // tracing::info!("Refresh_token: {refresh_token}");
             }
             ResponseType::LogIn => {
                 let user = UserRepository::find_by_email(&mut tx, &magic_token.email)
@@ -207,14 +217,52 @@ impl AuthService {
 
                 (access_token, refresh_token) =
                     AuthService::create_session(&mut tx, &user.email, user.id).await?;
-
-                tracing::info!("Access_token: {access_token}");
-                tracing::info!("Refresh_token: {refresh_token}");
+                //
+                // tracing::info!("Access_token: {access_token}");
+                // tracing::info!("Refresh_token: {refresh_token}");
             }
         }
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
 
         Ok((access_token, refresh_token))
+    }
+
+    pub async fn refresh(
+        pool: &Pool<Postgres>,
+        raw_refresh_token: &str,
+    ) -> Result<String, VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+        let hashed_refresh_token = AuthService::generate_sha256(raw_refresh_token);
+
+        let refresh_token_data =
+            RefreshTokenRepository::find_by_token(&mut tx, &hashed_refresh_token)
+                .await?
+                .ok_or(VeloxError::InvalidToken)?;
+
+        if refresh_token_data.expires_at < chrono::Utc::now() {
+            return Err(VeloxError::InvalidToken);
+        }
+
+        let user = UserRepository::find_by_id(&mut tx, &refresh_token_data.user_id)
+            .await?
+            .ok_or(VeloxError::NotFound)?;
+
+        let access_token = AuthService::generate_access_token(&user.email)?;
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+
+        Ok(access_token)
+    }
+
+    pub async fn logout(pool: &Pool<Postgres>, raw_refresh_token: &str) -> Result<(), VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+        let hashed_refresh_token = AuthService::generate_sha256(raw_refresh_token);
+
+        RefreshTokenRepository::delete_by_token(&mut tx, &hashed_refresh_token).await?;
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+
+        Ok(())
     }
 }

@@ -9,6 +9,7 @@ pub mod dto;
 pub mod error;
 pub mod handlers;
 pub mod logger;
+pub mod middlewares;
 pub mod models;
 pub mod repositories;
 pub mod routes;
@@ -18,8 +19,6 @@ pub mod utils;
 pub mod app_state;
 
 use crate::database::connect;
-
-use crate::repositories::user_repository;
 
 #[tokio::main]
 async fn main() -> Result<(), VeloxError> {
