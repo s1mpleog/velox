@@ -19,6 +19,19 @@ impl FolderRepository {
             .map_err(VeloxError::SqlxError)
     }
 
+    pub async fn find_by_id(
+        tx: &mut PgConnection,
+        id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<Option<Folder>, VeloxError> {
+        sqlx::query_as::<_, Folder>("SELECT * from folders WHERE id = $1 AND user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .fetch_optional(tx)
+            .await
+            .map_err(VeloxError::SqlxError)
+    }
+
     pub async fn create(
         tx: &mut PgConnection,
         name: &str,
@@ -32,6 +45,27 @@ impl FolderRepository {
             .execute(tx)
             .await
             .map_err(VeloxError::SqlxError)?;
+
+        Ok(())
+    }
+
+    pub async fn rename(
+        tx: &mut PgConnection,
+        new_name: &str,
+        user_id: &Uuid,
+        folder_id: &Uuid,
+    ) -> Result<(), VeloxError> {
+        let result = sqlx::query("UPDATE folders SET name = $1 WHERE id = $2 AND user_id = $3")
+            .bind(new_name)
+            .bind(folder_id)
+            .bind(user_id)
+            .execute(tx)
+            .await
+            .map_err(VeloxError::SqlxError)?;
+
+        if result.rows_affected() == 0 {
+            return Err(VeloxError::NotFound);
+        }
 
         Ok(())
     }

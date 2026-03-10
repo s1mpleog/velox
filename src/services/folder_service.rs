@@ -1,7 +1,8 @@
 use sqlx::{Pool, Postgres};
+use uuid::Uuid;
 
 use crate::{
-    dto::folder_dto::CreateFolderRequest,
+    dto::folder_dto::{CreateFolderRequest, RenameFolderRequest},
     error::VeloxError,
     repositories::{folder_repository::FolderRepository, user_repository::UserRepository},
 };
@@ -38,6 +39,25 @@ impl FolderService {
             request_data.parent_id.as_ref(),
         )
         .await?;
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+
+        Ok(())
+    }
+
+    pub async fn rename(
+        pool: &Pool<Postgres>,
+        folder_id: &Uuid,
+        user_email: &str,
+        request_data: &RenameFolderRequest,
+    ) -> Result<(), VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+
+        let user = UserRepository::find_by_email(&mut tx, user_email)
+            .await?
+            .ok_or(VeloxError::NotFound)?;
+
+        FolderRepository::rename(&mut tx, &request_data.new_name, &user.id, folder_id).await?;
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
 

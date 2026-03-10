@@ -1,4 +1,7 @@
-use axum::{Router, middleware, routing::post};
+use axum::{
+    Router, middleware,
+    routing::{patch, post},
+};
 
 use crate::{
     app_state::AppState,
@@ -9,5 +12,6 @@ use crate::{
 pub fn folder_route() -> Router<AppState> {
     Router::new()
         .route("/create", post(FolderHandler::create_folder))
+        .route("/{id}/rename", patch(FolderHandler::rename))
         .layer(middleware::from_fn(auth_middleware::auth_middleware))
 }
