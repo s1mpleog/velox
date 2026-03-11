@@ -7,6 +7,8 @@ use axum::{
 use uuid::Uuid;
 use validator::Validate;
 
+use serde_json::json;
+
 use crate::{
     app_state::AppState,
     dto::folder_dto::{CreateFolderRequest, RenameFolderRequest},
@@ -51,5 +53,28 @@ impl FolderHandler {
     ) -> Result<impl IntoResponse, VeloxError> {
         FolderService::delete(&state.pool, &user_email, &folder_id).await?;
         Ok((StatusCode::OK, "Folder deleted successfully"))
+    }
+
+    pub async fn find_all(
+        State(state): State<AppState>,
+        Extension(user_email): Extension<String>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        let folders = FolderService::get_all(&state.pool, &user_email).await?;
+
+        let response = Json(json!({"folders": folders}));
+
+        Ok((StatusCode::OK, response))
+    }
+
+    pub async fn get_contents(
+        State(state): State<AppState>,
+        Path(folder_id): Path<Uuid>,
+        Extension(user_email): Extension<String>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        let contents = FolderService::get_contents(&state.pool, &user_email, &folder_id).await?;
+
+        let response = Json(json!({"contents": contents}));
+
+        Ok((StatusCode::OK, response))
     }
 }

@@ -1,5 +1,6 @@
 add streaming in file upload
-downlaod file with presigned url
-delete file
+downlaod file with presigned url (done)
+delete file (done)
+add max 1gb upload limit
 share file
 optimize the code take care of all TODOs

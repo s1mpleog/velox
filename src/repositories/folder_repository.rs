@@ -88,4 +88,34 @@ impl FolderRepository {
 
         Ok(())
     }
+
+    pub async fn find_all(
+        tx: &mut PgConnection,
+        user_id: &Uuid,
+    ) -> Result<Vec<Folder>, VeloxError> {
+        let folders = sqlx::query_as::<_, Folder>("SELECT * from folders WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(tx)
+            .await
+            .map_err(VeloxError::SqlxError)?;
+
+        Ok(folders)
+    }
+
+    pub async fn find_by_parent_id(
+        tx: &mut PgConnection,
+        parent_id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<Vec<Folder>, VeloxError> {
+        let folders = sqlx::query_as::<_, Folder>(
+            "SELECT * from folders WHERE parent_id = $1 AND user_id = $1",
+        )
+        .bind(parent_id)
+        .bind(user_id)
+        .fetch_all(tx)
+        .await
+        .map_err(VeloxError::SqlxError)?;
+
+        Ok(folders)
+    }
 }

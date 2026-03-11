@@ -2,9 +2,13 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::{
-    dto::folder_dto::{CreateFolderRequest, RenameFolderRequest},
+    dto::folder_dto::{CreateFolderRequest, FolderContents, RenameFolderRequest},
     error::VeloxError,
-    repositories::{folder_repository::FolderRepository, user_repository::UserRepository},
+    models::folder_model::Folder,
+    repositories::{
+        file_repository::FileRepository, folder_repository::FolderRepository,
+        user_repository::UserRepository,
+    },
 };
 
 pub struct FolderService {}
@@ -79,5 +83,39 @@ impl FolderService {
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
         Ok(())
+    }
+
+    pub async fn get_all(
+        pool: &Pool<Postgres>,
+        user_email: &str,
+    ) -> Result<Vec<Folder>, VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+
+        let user = UserRepository::find_by_email(&mut tx, user_email)
+            .await?
+            .ok_or(VeloxError::NotFound)?;
+
+        let folders = FolderRepository::find_all(&mut tx, &user.id).await?;
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+        Ok(folders)
+    }
+
+    pub async fn get_contents(
+        pool: &Pool<Postgres>,
+        user_email: &str,
+        folder_id: &Uuid,
+    ) -> Result<FolderContents, VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+
+        let user = UserRepository::find_by_email(&mut tx, user_email)
+            .await?
+            .ok_or(VeloxError::NotFound)?;
+
+        let folders = FolderRepository::find_by_parent_id(&mut tx, &folder_id, &user.id).await?;
+        let files = FileRepository::find_by_folder_id(&mut tx, &user.id, &folder_id).await?;
+
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+        Ok(FolderContents { files, folders })
     }
 }

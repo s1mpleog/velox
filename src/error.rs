@@ -23,6 +23,8 @@ pub enum VeloxError {
     InternalError,
     #[error("missing environment variable: {0}")]
     EnvError(String),
+    #[error("Storage quota reached")]
+    StorageLimitExceeded,
 }
 
 impl IntoResponse for VeloxError {
@@ -38,6 +40,7 @@ impl IntoResponse for VeloxError {
             Self::AuthError => (StatusCode::UNAUTHORIZED, "AUTH_ERROR"),
             Self::InternalError => (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR"),
             Self::EnvError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "ENV_ERROR"),
+            Self::StorageLimitExceeded => (StatusCode::BAD_REQUEST, "StorageLimitExceeded"),
         }
         .into_response()
     }

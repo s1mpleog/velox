@@ -1,13 +1,26 @@
 use axum::{
     Extension, Json,
-    extract::{Multipart, Path, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
+use bytes::Bytes;
+use serde::Deserialize;
 use serde_json::json;
 use uuid::Uuid;
+use validator::Validate;
 
-use crate::{app_state::AppState, error::VeloxError, services::file_service::FileService};
+use crate::{
+    app_state::AppState,
+    dto::file_dto::RenameFileRequest,
+    error::VeloxError,
+    services::file_service::{FileService, FileStream, FileUpload},
+};
+
+#[derive(Deserialize)]
+pub struct ListFilesQuery {
+    pub folder_id: Option<Uuid>,
+}
 
 pub struct FileHandler {}
 
@@ -17,7 +30,7 @@ impl FileHandler {
         Extension(user_email): Extension<String>,
         mut multipart: Multipart,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let mut files: Vec<(String, String, Vec<u8>)> = Vec::new();
+        let mut files: Vec<FileUpload> = Vec::new();
         let mut folder_id: Option<Uuid> = None;
 
         while let Some(field) = multipart
@@ -32,11 +45,25 @@ impl FileHandler {
                 .unwrap_or("application/octet-stream")
                 .to_string();
 
-            let data = field.bytes().await.map_err(|_| VeloxError::InternalError)?;
-
             if name == "file" {
-                files.push((file_name, content_type, data.to_vec()));
+                let mut buffer: Vec<u8> = Vec::new();
+                let mut field = field;
+
+                while let Some(chunk) =
+                    field.chunk().await.map_err(|_| VeloxError::InternalError)?
+                {
+                    buffer.extend_from_slice(&chunk);
+                }
+                let stream: FileStream = Box::pin(futures_util::stream::once(async move {
+                    Ok::<Bytes, VeloxError>(Bytes::from(buffer))
+                }));
+                files.push(FileUpload {
+                    file_name,
+                    content_type,
+                    stream,
+                });
             } else if name == "folder_id" {
+                let data = field.bytes().await.map_err(|_| VeloxError::InternalError)?;
                 let folder_id_str = String::from_utf8(data.to_vec())
                     .map_err(|_| VeloxError::ValidationError("invalid folder_id".to_string()))?;
 
@@ -67,5 +94,42 @@ impl FileHandler {
             FileService::download(&state.pool, &state.r2, &user_email, &file_id).await?;
         let url = Json(json!({"url": presigned.uri().to_string() }));
         Ok((StatusCode::OK, url))
+    }
+
+    pub async fn get_all(
+        State(state): State<AppState>,
+        Extension(user_email): Extension<String>,
+        Query(params): Query<ListFilesQuery>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        let files =
+            FileService::get_all(&state.pool, &user_email, params.folder_id.as_ref()).await?;
+
+        let response = Json(json!({"files": files}));
+
+        Ok((StatusCode::OK, response))
+    }
+
+    pub async fn delete(
+        State(state): State<AppState>,
+        Extension(user_email): Extension<String>,
+        Path(file_id): Path<Uuid>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        FileService::delete(&state.pool, &state.r2, &user_email, &file_id).await?;
+
+        Ok((StatusCode::OK, "File deleted successfully"))
+    }
+
+    pub async fn rename(
+        State(state): State<AppState>,
+        Extension(user_email): Extension<String>,
+        Path(file_id): Path<Uuid>,
+        Json(body): Json<RenameFileRequest>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        body.validate()
+            .map_err(|e| VeloxError::ValidationError(e.to_string()))?;
+
+        FileService::rename(&state.pool, &user_email, &file_id, &body).await?;
+
+        Ok((StatusCode::OK, "File renamed successfully"))
     }
 }
