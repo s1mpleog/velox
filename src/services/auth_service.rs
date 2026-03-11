@@ -132,7 +132,7 @@ impl AuthService {
         // store this inside database
         let token_sha256 = AuthService::generate_sha256(&token);
 
-        if let Some(user) = is_user_exists {
+        if let Some(_user) = is_user_exists {
             // tracing::debug!("user exists");
             MagicTokenRepository::delete_by_email(&mut tx, email).await?;
 

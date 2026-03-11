@@ -1,6 +1,6 @@
-add streaming in file upload
+add streaming in file upload (done)
 downlaod file with presigned url (done)
 delete file (done)
-add max 1gb upload limit
+add max 1gb limit (done)
 share file
 optimize the code take care of all TODOs

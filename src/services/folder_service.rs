@@ -118,4 +118,18 @@ impl FolderService {
         tx.commit().await.map_err(VeloxError::SqlxError)?;
         Ok(FolderContents { files, folders })
     }
+
+    pub async fn get_root_contents(
+        pool: &Pool<Postgres>,
+        user_email: &str,
+    ) -> Result<FolderContents, VeloxError> {
+        let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
+        let user = UserRepository::find_by_email(&mut tx, user_email)
+            .await?
+            .ok_or(VeloxError::NotFound)?;
+        let folders = FolderRepository::find_root_folders(&mut tx, &user.id).await?;
+        let files = FileRepository::find_root_files(&mut tx, &user.id).await?;
+        tx.commit().await.map_err(VeloxError::SqlxError)?;
+        Ok(FolderContents { folders, files })
+    }
 }

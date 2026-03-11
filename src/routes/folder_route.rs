@@ -16,5 +16,6 @@ pub fn folder_route() -> Router<AppState> {
         .route("/{id}", delete(FolderHandler::delete))
         .route("/all", get(FolderHandler::find_all))
         .route("/{id}/contents", get(FolderHandler::get_contents))
+        .route("/root", get(FolderHandler::get_root_contents))
         .layer(middleware::from_fn(auth_middleware::auth_middleware))
 }

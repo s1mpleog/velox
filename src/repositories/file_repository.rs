@@ -123,4 +123,17 @@ impl FileRepository {
 
         Ok(total_used)
     }
+
+    pub async fn find_root_files(
+        tx: &mut PgConnection,
+        user_id: &Uuid,
+    ) -> Result<Vec<File>, VeloxError> {
+        let files =
+            sqlx::query_as::<_, File>("SELECT * FROM files WHERE owner = $1 AND folder_id IS NULL")
+                .bind(user_id)
+                .fetch_all(tx)
+                .await
+                .map_err(VeloxError::SqlxError)?;
+        Ok(files)
+    }
 }

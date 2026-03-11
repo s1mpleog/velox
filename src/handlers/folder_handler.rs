@@ -66,6 +66,14 @@ impl FolderHandler {
         Ok((StatusCode::OK, response))
     }
 
+    pub async fn get_root_contents(
+        State(state): State<AppState>,
+        Extension(user_email): Extension<String>,
+    ) -> Result<impl IntoResponse, VeloxError> {
+        let contents = FolderService::get_root_contents(&state.pool, &user_email).await?;
+        Ok((StatusCode::OK, Json(contents)))
+    }
+
     pub async fn get_contents(
         State(state): State<AppState>,
         Path(folder_id): Path<Uuid>,
@@ -73,7 +81,7 @@ impl FolderHandler {
     ) -> Result<impl IntoResponse, VeloxError> {
         let contents = FolderService::get_contents(&state.pool, &user_email, &folder_id).await?;
 
-        let response = Json(json!({"contents": contents}));
+        let response = Json(json!(contents));
 
         Ok((StatusCode::OK, response))
     }
