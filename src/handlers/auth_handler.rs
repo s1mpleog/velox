@@ -21,9 +21,11 @@ impl AuthHandler {
         body.validate()
             .map_err(|e| VeloxError::ValidationError(e.to_string()))?;
 
-        tracing::debug!("got email as: {:?}", body.email);
+        tracing::info!("login body validated");
 
         AuthService::login(&state.pool, &body.email).await?;
+
+        tracing::info!("auth service ran successfully");
 
         // tracing::debug!("{:?}", login.err());
 
@@ -35,10 +37,12 @@ impl AuthHandler {
         State(state): State<AppState>,
         jar: CookieJar,
     ) -> Result<(CookieJar, impl IntoResponse), VeloxError> {
-        tracing::info!("got token as: {}", params.token);
+        tracing::info!("received token");
 
         let (access_token, refresh_token) =
             AuthService::authorize(&state.pool, &params.token).await?;
+
+        tracing::info!("Sucessfully ran authorize service, created refresh and access token");
 
         // create cookie for access_token and refresh_token
 
@@ -78,7 +82,11 @@ impl AuthHandler {
         let refresh_token = jar.get("refresh_token").ok_or(VeloxError::AuthError)?;
         let refresh_token_to_string = refresh_token.value().to_string();
 
+        tracing::info!("fetched refresh token successfully");
+
         let access_token = AuthService::refresh(&state.pool, &refresh_token_to_string).await?;
+
+        tracing::info!("refresh service ran successfully generated new access token");
 
         let access_token_expires = cookie::time::Duration::minutes(15);
 
@@ -92,6 +100,8 @@ impl AuthHandler {
 
         let jar = jar.add(access_token_cookie);
 
+        tracing::info!("created cookie successfully");
+
         Ok((jar, (StatusCode::OK, "successfully generated access_token")))
     }
 
@@ -102,11 +112,17 @@ impl AuthHandler {
         let refresh_token = jar.get("refresh_token").ok_or(VeloxError::AuthError)?;
         let refresh_token_to_string = refresh_token.value().to_string();
 
+        tracing::info!("fetched refresh token successfully");
+
         AuthService::logout(&state.pool, &refresh_token_to_string).await?;
+
+        tracing::info!("login service ran successfully");
 
         let jar = jar
             .remove(Cookie::from("access_token"))
             .remove(Cookie::from("refresh_token"));
+
+        tracing::info!("deleted cookies successfully");
 
         Ok((jar, (StatusCode::OK, "user logged out successfully")))
     }

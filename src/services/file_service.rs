@@ -9,12 +9,8 @@ use uuid::Uuid;
 use std::pin::Pin;
 
 use crate::{
-    dto::file_dto::RenameFileRequest,
-    error::VeloxError,
-    models::file_model::File,
-    repositories::{file_repository::FileRepository, user_repository::UserRepository},
-    storage,
-    utils::Utils,
+    dto::file_dto::RenameFileRequest, error::VeloxError, models::file_model::File,
+    repositories::file_repository::FileRepository, storage, utils::Utils,
 };
 
 const GB_IN_NUMS: i64 = 1_073_741_824;
@@ -33,19 +29,16 @@ impl FileService {
     pub async fn upload(
         pool: &Pool<Postgres>,
         r2_client: &aws_sdk_s3::Client,
-        user_email: &str,
+        user_id: &Uuid,
         folder_id: Option<&Uuid>,
         files: Vec<FileUpload>,
     ) -> Result<(), VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
-        let user = UserRepository::find_by_email(&mut tx, user_email)
-            .await?
-            .ok_or(VeloxError::NotFound)?;
 
         tracing::debug!("files count: {}", files.len());
 
         // TODO: premium user can get 2GB limit
-        let total_used = FileRepository::get_total_storage(&mut tx, &user.id).await?;
+        let total_used = FileRepository::get_total_storage(&mut tx, user_id).await?;
 
         // tracing::error!("{:?}", total_used.as_ref().err());
 
@@ -55,7 +48,7 @@ impl FileService {
         for file in files {
             tracing::debug!("processing file: {}", file.file_name);
             let file_id = Uuid::new_v4();
-            let key = format!("{}/{}/{}", user.id, file_id, file.file_name);
+            let key = format!("{}/{}/{}", user_id, file_id, file.file_name);
             let url = format!("{}/{}/{}", endpoint, bucket, key);
 
             let file_size =
@@ -76,7 +69,7 @@ impl FileService {
                 &file_id,
                 &url,
                 &file.file_name,
-                &user.id,
+                user_id,
                 folder_id,
                 file_size,
                 &file.content_type,
@@ -90,16 +83,12 @@ impl FileService {
     pub async fn download(
         pool: &Pool<Postgres>,
         r2_client: &aws_sdk_s3::Client,
-        user_email: &str,
+        user_id: &Uuid,
         file_id: &Uuid,
     ) -> Result<PresignedRequest, VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
 
-        let user = UserRepository::find_by_email(&mut tx, user_email)
-            .await?
-            .ok_or(VeloxError::NotFound)?;
-
-        let file = FileRepository::find_by_id(&mut tx, file_id, &user.id)
+        let file = FileRepository::find_by_id(&mut tx, file_id, user_id)
             .await?
             .ok_or(VeloxError::NotFound)?;
 
@@ -130,17 +119,11 @@ impl FileService {
 
     pub async fn get_all(
         pool: &Pool<Postgres>,
-        user_email: &str,
+        user_id: &Uuid,
         folder_id: Option<&Uuid>,
     ) -> Result<Vec<File>, VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
-
-        let user = UserRepository::find_by_email(&mut tx, user_email)
-            .await?
-            .ok_or(VeloxError::NotFound)?;
-
-        let files = FileRepository::find_all(&mut tx, &user.id, folder_id).await?;
-
+        let files = FileRepository::find_all(&mut tx, user_id, folder_id).await?;
         tx.commit().await.map_err(VeloxError::SqlxError)?;
         Ok(files)
     }
@@ -148,16 +131,12 @@ impl FileService {
     pub async fn delete(
         pool: &Pool<Postgres>,
         r2_client: &aws_sdk_s3::Client,
-        user_email: &str,
+        user_id: &Uuid,
         file_id: &Uuid,
     ) -> Result<(), VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
 
-        let user = UserRepository::find_by_email(&mut tx, user_email)
-            .await?
-            .ok_or(VeloxError::NotFound)?;
-
-        let url = FileRepository::delete(&mut tx, &user.id, file_id)
+        let url = FileRepository::delete(&mut tx, user_id, file_id)
             .await?
             .ok_or(VeloxError::NotFound)?;
 
@@ -177,21 +156,17 @@ impl FileService {
 
     pub async fn rename(
         pool: &Pool<Postgres>,
-        user_email: &str,
+        user_id: &Uuid,
         file_id: &Uuid,
         request_body: &RenameFileRequest,
     ) -> Result<(), VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
 
-        let user = UserRepository::find_by_email(&mut tx, user_email)
-            .await?
-            .ok_or(VeloxError::NotFound)?;
-
         // TODO: handle this later
         // let extension = file.name.rsplit('.').next().unwrap_or("");
         // let new_name = format!("{}.{}", request_body.new_name, extension);
 
-        FileRepository::rename(&mut tx, &request_body.new_name, &user.id, file_id).await?;
+        FileRepository::rename(&mut tx, &request_body.new_name, user_id, file_id).await?;
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
         Ok(())

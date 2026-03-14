@@ -61,7 +61,7 @@ async fn main() -> Result<(), VeloxError> {
         .await
         .map_err(|_| VeloxError::InternalError)?;
 
-    tracing::debug!("listening on {}", listener.local_addr().unwrap());
+    tracing::info!("listening on {}", listener.local_addr().unwrap());
 
     axum::serve(listener, app)
         .await

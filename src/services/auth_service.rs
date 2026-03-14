@@ -17,7 +17,7 @@ use crate::utils::Utils;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Claims {
-    pub email: String,
+    pub user_id: Uuid,
     pub exp: usize,
 }
 
@@ -38,14 +38,15 @@ impl AuthService {
         hex::encode(hasher.finalize())
     }
 
-    fn generate_access_token(email: &str) -> Result<String, VeloxError> {
+    // TODO: do i really need to pass user id as ref ? check that
+    fn generate_access_token(user_id: &Uuid) -> Result<String, VeloxError> {
         let secret = Utils::load_env("JWT_SECRET")?;
         let key = secret.as_bytes();
 
         let expires_at = chrono::Utc::now() + chrono::Duration::minutes(15);
 
         let my_claims = Claims {
-            email: email.to_string(),
+            user_id: *user_id,
             exp: expires_at.timestamp() as usize,
         };
 
@@ -71,13 +72,12 @@ impl AuthService {
 
     async fn create_session(
         tx: &mut PgConnection,
-        email: &str,
-        user_id: Uuid,
+        user_id: &Uuid,
     ) -> Result<(String, String), VeloxError> {
         let refresh_token = AuthService::generate_random_token();
         let hashed_refresh_token = AuthService::generate_sha256(&refresh_token);
 
-        let access_token = AuthService::generate_access_token(email)?;
+        let access_token = AuthService::generate_access_token(user_id)?;
 
         // store hashed_refresh_token inside database
         RefreshTokenRepository::insert(tx, &hashed_refresh_token, &user_id).await?;
@@ -119,16 +119,8 @@ impl AuthService {
     }
 
     pub async fn login(pool: &Pool<Postgres>, email: &str) -> Result<(), VeloxError> {
-        tracing::debug!("before tx begin");
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
-
-        tracing::debug!("after tx");
-
         let is_user_exists = UserRepository::find_by_email(&mut tx, email).await?;
-
-        // tracing::warn!("error: {:?}", is_user_exists.as_ref().err());
-
-        tracing::debug!("after user find by email;");
 
         // we will send this in user email
         let token = AuthService::generate_random_token();
@@ -136,30 +128,28 @@ impl AuthService {
         let token_sha256 = AuthService::generate_sha256(&token);
 
         if let Some(_user) = is_user_exists {
-            tracing::debug!("user exists");
+            tracing::info!("user already exists proceeding to login logic");
             MagicTokenRepository::delete_by_email(&mut tx, email).await?;
-
-            tracing::debug!("after magic token delete_by_email");
+            tracing::info!("deleted old token sucessfully");
 
             MagicTokenRepository::insert(&mut tx, &token_sha256, email, ResponseType::LogIn)
                 .await?;
 
-            tracing::debug!("after magic token insert");
+            tracing::info!("created magic token successfully");
 
             AuthService::send_mail(ResponseType::LogIn, email, &token).await?;
+            tracing::info!("sent email successfully");
         } else {
+            tracing::info!("user does not exists");
             MagicTokenRepository::delete_by_email(&mut tx, email).await?;
 
             TempUserRepository::upsert(&mut tx, email).await?;
-
-            //TODO: make sure to remove these when pushing to production
-            tracing::info!("Generated random token: {}", token);
-            tracing::info!("Sha 256 token: {}", token_sha256);
 
             MagicTokenRepository::insert(&mut tx, &token_sha256, email, ResponseType::SignIn)
                 .await?;
 
             AuthService::send_mail(ResponseType::SignIn, email, &token).await?;
+            tracing::info!("sent email successfully");
         }
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
@@ -190,16 +180,19 @@ impl AuthService {
             .ok_or(VeloxError::InvalidToken)?;
 
         if magic_token.expires_at < chrono::Utc::now() {
+            tracing::info!("got expired token");
             return Err(VeloxError::InvalidToken);
         }
 
+        tracing::info!("found valid token");
+
         let (access_token, refresh_token);
 
-
-            tracing::debug!("got valid token");
+        tracing::debug!("got valid token");
 
         match magic_token.kind {
             ResponseType::SignIn => {
+                tracing::info!("sign in request");
                 let temp_user = TempUserRepository::find_by_email(&mut tx, &magic_token.email)
                     .await?
                     .ok_or(VeloxError::InvalidToken)?;
@@ -209,15 +202,12 @@ impl AuthService {
                 MagicTokenRepository::delete_by_email(&mut tx, &magic_token.email).await?;
 
                 (access_token, refresh_token) =
-                    AuthService::create_session(&mut tx, &temp_user.email, user.id).await?;
+                    AuthService::create_session(&mut tx, &user.id).await?;
 
-
-            tracing::debug!("type is signin");
-
-                // tracing::info!("Access_token: {access_token}");
-                // tracing::info!("Refresh_token: {refresh_token}");
+                tracing::info!("created session successfully");
             }
             ResponseType::LogIn => {
+                tracing::info!("login request");
                 let user = UserRepository::find_by_email(&mut tx, &magic_token.email)
                     .await?
                     .ok_or(VeloxError::NotFound)?;
@@ -225,14 +215,8 @@ impl AuthService {
                 MagicTokenRepository::delete_by_email(&mut tx, &magic_token.email).await?;
 
                 (access_token, refresh_token) =
-                    AuthService::create_session(&mut tx, &user.email, user.id).await?;
-            
-                tracing::debug!("type is login");
-
-                tracing::debug!("user email is: {}", user.email);
-                //
-                // tracing::info!("Access_token: {access_token}");
-                // tracing::info!("Refresh_token: {refresh_token}");
+                    AuthService::create_session(&mut tx, &user.id).await?;
+                tracing::info!("created session successfully");
             }
         }
 
@@ -248,12 +232,15 @@ impl AuthService {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
         let hashed_refresh_token = AuthService::generate_sha256(raw_refresh_token);
 
+        // TODO: cycle refresh token delete older one and generate new each time
+
         let refresh_token_data =
             RefreshTokenRepository::find_by_token(&mut tx, &hashed_refresh_token)
                 .await?
                 .ok_or(VeloxError::InvalidToken)?;
 
         if refresh_token_data.expires_at < chrono::Utc::now() {
+            tracing::info!("got expired token");
             return Err(VeloxError::InvalidToken);
         }
 
@@ -261,7 +248,9 @@ impl AuthService {
             .await?
             .ok_or(VeloxError::NotFound)?;
 
-        let access_token = AuthService::generate_access_token(&user.email)?;
+        tracing::info!("found valid user");
+
+        let access_token = AuthService::generate_access_token(&user.id)?;
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
 

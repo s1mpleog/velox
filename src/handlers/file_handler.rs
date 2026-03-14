@@ -27,7 +27,7 @@ pub struct FileHandler {}
 impl FileHandler {
     pub async fn upload(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         mut multipart: Multipart,
     ) -> Result<impl IntoResponse, VeloxError> {
         let mut files: Vec<FileUpload> = Vec::new();
@@ -45,6 +45,7 @@ impl FileHandler {
                 .unwrap_or("application/octet-stream")
                 .to_string();
 
+            // THIS if block is written by claude
             if name == "file" {
                 let mut buffer: Vec<u8> = Vec::new();
                 let mut field = field;
@@ -73,36 +74,27 @@ impl FileHandler {
             }
         }
 
-        FileService::upload(
-            &state.pool,
-            &state.r2,
-            &user_email,
-            folder_id.as_ref(),
-            files,
-        )
-        .await?;
+        FileService::upload(&state.pool, &state.r2, &user_id, folder_id.as_ref(), files).await?;
 
         Ok((StatusCode::OK, "File uploaded successfully"))
     }
 
     pub async fn download(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         Path(file_id): Path<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let presigned =
-            FileService::download(&state.pool, &state.r2, &user_email, &file_id).await?;
+        let presigned = FileService::download(&state.pool, &state.r2, &user_id, &file_id).await?;
         let url = Json(json!({"url": presigned.uri().to_string() }));
         Ok((StatusCode::OK, url))
     }
 
     pub async fn get_all(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         Query(params): Query<ListFilesQuery>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let files =
-            FileService::get_all(&state.pool, &user_email, params.folder_id.as_ref()).await?;
+        let files = FileService::get_all(&state.pool, &user_id, params.folder_id.as_ref()).await?;
 
         let response = Json(json!({"files": files}));
 
@@ -111,24 +103,24 @@ impl FileHandler {
 
     pub async fn delete(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         Path(file_id): Path<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        FileService::delete(&state.pool, &state.r2, &user_email, &file_id).await?;
+        FileService::delete(&state.pool, &state.r2, &user_id, &file_id).await?;
 
         Ok((StatusCode::OK, "File deleted successfully"))
     }
 
     pub async fn rename(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         Path(file_id): Path<Uuid>,
         Json(body): Json<RenameFileRequest>,
     ) -> Result<impl IntoResponse, VeloxError> {
         body.validate()
             .map_err(|e| VeloxError::ValidationError(e.to_string()))?;
 
-        FileService::rename(&state.pool, &user_email, &file_id, &body).await?;
+        FileService::rename(&state.pool, &user_id, &file_id, &body).await?;
 
         Ok((StatusCode::OK, "File renamed successfully"))
     }

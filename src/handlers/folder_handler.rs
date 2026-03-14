@@ -21,12 +21,12 @@ pub struct FolderHandler {}
 impl FolderHandler {
     pub async fn create_folder(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         Json(body): Json<CreateFolderRequest>,
     ) -> Result<impl IntoResponse, VeloxError> {
         body.validate()
             .map_err(|e| VeloxError::ValidationError(e.to_string()))?;
-        FolderService::create(&state.pool, &body, &user_email).await?;
+        FolderService::create(&state.pool, &body, &user_id).await?;
 
         Ok((StatusCode::CREATED, "folder created successfully"))
     }
@@ -34,14 +34,14 @@ impl FolderHandler {
     pub async fn rename(
         State(state): State<AppState>,
         Path(folder_id): Path<Uuid>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
         Json(body): Json<RenameFolderRequest>,
     ) -> Result<impl IntoResponse, VeloxError> {
         tracing::info!("folder id: {}", folder_id);
         body.validate()
             .map_err(|e| VeloxError::ValidationError(e.to_string()))?;
 
-        FolderService::rename(&state.pool, &folder_id, &user_email, &body).await?;
+        FolderService::rename(&state.pool, &folder_id, &user_id, &body).await?;
 
         Ok((StatusCode::OK, "Folder rename successfully"))
     }
@@ -49,40 +49,36 @@ impl FolderHandler {
     pub async fn delete(
         State(state): State<AppState>,
         Path(folder_id): Path<Uuid>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        FolderService::delete(&state.pool, &user_email, &folder_id).await?;
+        FolderService::delete(&state.pool, &user_id, &folder_id).await?;
         Ok((StatusCode::OK, "Folder deleted successfully"))
     }
 
     pub async fn find_all(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let folders = FolderService::get_all(&state.pool, &user_email).await?;
-
+        let folders = FolderService::get_all(&state.pool, &user_id).await?;
         let response = Json(json!({"folders": folders}));
-
         Ok((StatusCode::OK, response))
     }
 
     pub async fn get_root_contents(
         State(state): State<AppState>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let contents = FolderService::get_root_contents(&state.pool, &user_email).await?;
+        let contents = FolderService::get_root_contents(&state.pool, &user_id).await?;
         Ok((StatusCode::OK, Json(contents)))
     }
 
     pub async fn get_contents(
         State(state): State<AppState>,
         Path(folder_id): Path<Uuid>,
-        Extension(user_email): Extension<String>,
+        Extension(user_id): Extension<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let contents = FolderService::get_contents(&state.pool, &user_email, &folder_id).await?;
-
+        let contents = FolderService::get_contents(&state.pool, &user_id, &folder_id).await?;
         let response = Json(json!(contents));
-
         Ok((StatusCode::OK, response))
     }
 }
