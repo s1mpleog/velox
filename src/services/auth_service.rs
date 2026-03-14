@@ -102,9 +102,12 @@ impl AuthService {
             ResponseType::SignIn => "Welcome to Velox - verify your email",
         };
 
-        // TODO: use DEPLOYMENT_URL instead of hardcoding localhost
-        let email = CreateEmailBaseOptions::new(from, to, subject)
-        .with_html(&format!("<strong>Click <a href='http://localhost:3000/auth/authorize?token={}'>here</a> to verify</strong>", raw_token));
+        let frontend_url = Utils::load_env("FRONTEND_URL")?;
+
+        let email = CreateEmailBaseOptions::new(from, to, subject).with_html(&format!(
+            "<strong>Click <a href='{}/auth/authorize?token={}'>here</a> to verify</strong>",
+            frontend_url, raw_token
+        ));
 
         let _email = resend
             .emails
@@ -116,16 +119,16 @@ impl AuthService {
     }
 
     pub async fn login(pool: &Pool<Postgres>, email: &str) -> Result<(), VeloxError> {
-        // tracing::debug!("before tx begin");
+        tracing::debug!("before tx begin");
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
 
-        // tracing::debug!("after tx");
+        tracing::debug!("after tx");
 
         let is_user_exists = UserRepository::find_by_email(&mut tx, email).await?;
 
         // tracing::warn!("error: {:?}", is_user_exists.as_ref().err());
 
-        // tracing::debug!("after user find by email;");
+        tracing::debug!("after user find by email;");
 
         // we will send this in user email
         let token = AuthService::generate_random_token();
@@ -133,15 +136,15 @@ impl AuthService {
         let token_sha256 = AuthService::generate_sha256(&token);
 
         if let Some(_user) = is_user_exists {
-            // tracing::debug!("user exists");
+            tracing::debug!("user exists");
             MagicTokenRepository::delete_by_email(&mut tx, email).await?;
 
-            // tracing::debug!("after magic token delete_by_email");
+            tracing::debug!("after magic token delete_by_email");
 
             MagicTokenRepository::insert(&mut tx, &token_sha256, email, ResponseType::LogIn)
                 .await?;
 
-            // tracing::debug!("after magic token insert");
+            tracing::debug!("after magic token insert");
 
             AuthService::send_mail(ResponseType::LogIn, email, &token).await?;
         } else {
@@ -192,6 +195,9 @@ impl AuthService {
 
         let (access_token, refresh_token);
 
+
+            tracing::debug!("got valid token");
+
         match magic_token.kind {
             ResponseType::SignIn => {
                 let temp_user = TempUserRepository::find_by_email(&mut tx, &magic_token.email)
@@ -205,6 +211,9 @@ impl AuthService {
                 (access_token, refresh_token) =
                     AuthService::create_session(&mut tx, &temp_user.email, user.id).await?;
 
+
+            tracing::debug!("type is signin");
+
                 // tracing::info!("Access_token: {access_token}");
                 // tracing::info!("Refresh_token: {refresh_token}");
             }
@@ -217,6 +226,10 @@ impl AuthService {
 
                 (access_token, refresh_token) =
                     AuthService::create_session(&mut tx, &user.email, user.id).await?;
+            
+                tracing::debug!("type is login");
+
+                tracing::debug!("user email is: {}", user.email);
                 //
                 // tracing::info!("Access_token: {access_token}");
                 // tracing::info!("Refresh_token: {refresh_token}");

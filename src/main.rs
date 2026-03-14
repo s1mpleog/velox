@@ -1,6 +1,9 @@
+use axum::http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use axum::http::{HeaderValue, Method};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde_json::json;
+use tower_http::cors::CorsLayer;
 
 use crate::storage::init_r2;
 use crate::{error::VeloxError, utils::Utils};
@@ -36,14 +39,25 @@ async fn main() -> Result<(), VeloxError> {
 
     let app_state = app_state::AppState { pool, r2 };
 
+    let frontend_url = Utils::load_env("FRONTEND_URL")
+        .map_err(|_| VeloxError::EnvError("failed to load frontend url".to_string()))?;
+
     let app = Router::new()
         .route("/ping", get(ping))
         .nest("/auth", routes::auth_route::auth_route(app_state.clone()))
+        .nest("/users", routes::user_route::user_route())
         .nest("/folders", routes::folder_route::folder_route())
         .nest("/files", routes::file_route::file_route())
-        .with_state(app_state);
+        .with_state(app_state)
+        .layer(
+            CorsLayer::new()
+                .allow_origin(frontend_url.parse::<HeaderValue>().unwrap())
+                .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
+                .allow_credentials(true)
+                .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE]),
+        );
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
         .map_err(|_| VeloxError::InternalError)?;
 

@@ -21,6 +21,8 @@ impl AuthHandler {
         body.validate()
             .map_err(|e| VeloxError::ValidationError(e.to_string()))?;
 
+        tracing::debug!("got email as: {:?}", body.email);
+
         AuthService::login(&state.pool, &body.email).await?;
 
         // tracing::debug!("{:?}", login.err());
@@ -63,6 +65,8 @@ impl AuthHandler {
             .build();
 
         let jar = jar.add(access_token_cookie).add(refresh_token_cookie);
+
+        tracing::info!("successfully authorized user");
 
         Ok((jar, (StatusCode::OK, "authorized successfully")))
     }
