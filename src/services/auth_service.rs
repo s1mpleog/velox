@@ -228,7 +228,7 @@ impl AuthService {
     pub async fn refresh(
         pool: &Pool<Postgres>,
         raw_refresh_token: &str,
-    ) -> Result<String, VeloxError> {
+    ) -> Result<(String, String), VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
         let hashed_refresh_token = AuthService::generate_sha256(raw_refresh_token);
 
@@ -250,11 +250,18 @@ impl AuthService {
 
         tracing::info!("found valid user");
 
+        RefreshTokenRepository::delete_by_token(&mut tx, &refresh_token_data.token).await?;
+
+        let refresh_token = AuthService::generate_random_token();
+        let hashed_refresh_token = AuthService::generate_sha256(&refresh_token);
+
+        RefreshTokenRepository::insert(&mut tx, &hashed_refresh_token, &user.id).await?;
+
         let access_token = AuthService::generate_access_token(&user.id)?;
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
 
-        Ok(access_token)
+        Ok((access_token, refresh_token))
     }
 
     pub async fn logout(pool: &Pool<Postgres>, raw_refresh_token: &str) -> Result<(), VeloxError> {

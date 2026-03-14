@@ -54,7 +54,7 @@ impl AuthHandler {
             .path("/")
             .http_only(true)
             .secure(true)
-            .same_site(cookie::SameSite::Lax)
+            .same_site(cookie::SameSite::Strict)
             .max_age(access_token_expires)
             .build();
 
@@ -64,7 +64,7 @@ impl AuthHandler {
             .path("/")
             .http_only(true)
             .secure(true)
-            .same_site(cookie::SameSite::Lax)
+            .same_site(cookie::SameSite::Strict)
             .max_age(refresh_token_expires)
             .build();
 
@@ -84,7 +84,8 @@ impl AuthHandler {
 
         tracing::info!("fetched refresh token successfully");
 
-        let access_token = AuthService::refresh(&state.pool, &refresh_token_to_string).await?;
+        let (access_token, refresh_token) =
+            AuthService::refresh(&state.pool, &refresh_token_to_string).await?;
 
         tracing::info!("refresh service ran successfully generated new access token");
 
@@ -94,11 +95,21 @@ impl AuthHandler {
             .path("/")
             .http_only(true)
             .secure(true)
-            .same_site(cookie::SameSite::Lax)
+            .same_site(cookie::SameSite::Strict)
             .max_age(access_token_expires)
             .build();
 
-        let jar = jar.add(access_token_cookie);
+        let refresh_token_expires = cookie::time::Duration::days(30);
+
+        let refresh_token_cookie = Cookie::build(("refresh_token", refresh_token))
+            .path("/")
+            .http_only(true)
+            .secure(true)
+            .same_site(cookie::SameSite::Strict)
+            .max_age(refresh_token_expires)
+            .build();
+
+        let jar = jar.add(access_token_cookie).add(refresh_token_cookie);
 
         tracing::info!("created cookie successfully");
 
