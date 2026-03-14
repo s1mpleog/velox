@@ -1,9 +1,11 @@
+auth system (done)
 add streaming in file upload (done)
 downlaod file with presigned url (done)
 delete file (done)
 add max 1gb limit (done)
-in auth system refresh delete the old refresh token and generate new one on each call this prevents what if attacker steals user refresh token ?
-optimize the code take care of all TODOs (done)
+in auth system refresh delete the old refresh token and generate new one on each call
+this prevents what if attacker steals user refresh token ?  (done)
+optimize the code take care of all TODOs
 
 features for v2
 add subscription paid user can have 2+GB total upload free user 1GB max
@@ -12,3 +14,4 @@ integrate stripe and web hook
 add trash feature and add cron job that will delete the file and folders which is marked as deleted and > 30 days
 add multiple sessions for user track each session ip address device name
 add file and folder sharing feature
+search files by name
