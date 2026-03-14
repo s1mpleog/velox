@@ -85,36 +85,83 @@ impl AuthService {
         Ok((access_token, refresh_token))
     }
 
+    fn magic_link_html(
+        frontend_url: &str,
+        raw_token: &str,
+        response_type: &ResponseType,
+    ) -> String {
+        let (label, heading, body, cta) = match response_type {
+            ResponseType::LogIn => (
+                "Sign in",
+                "Your login link is ready",
+                "Click the button below to sign in to your Velox account. This link expires in <strong style=\"color:#111;font-weight:500\">15 minutes</strong> and can only be used once.",
+                "Sign in to Velox",
+            ),
+            ResponseType::SignIn => (
+                "Welcome",
+                "Verify your email address",
+                "Thanks for signing up for Velox. Click the button below to verify your email and activate your account. This link expires in <strong style=\"color:#111;font-weight:500\">15 minutes</strong>.",
+                "Verify email address",
+            ),
+        };
+
+        let link = format!("{}/auth/authorize?token={}", frontend_url, raw_token);
+
+        format!(
+            r#"
+    <!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f5f5;font-family:sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:40px 16px;">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e5e5;">
+      <tr><td style="background:#0f0f0f;padding:24px 32px;">
+        <span style="color:#fff;font-size:18px;font-weight:600;">Velox</span>
+      </td></tr>
+      <tr><td style="padding:36px 32px 28px;">
+        <p style="font-size:12px;color:#888;margin:0 0 8px;text-transform:uppercase;letter-spacing:.08em;">{label}</p>
+        <h1 style="font-size:22px;font-weight:600;margin:0 0 16px;color:#111;">{heading}</h1>
+        <p style="font-size:15px;line-height:1.7;color:#555;margin:0 0 28px;">{body}</p>
+        <a href="{link}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:13px 28px;border-radius:8px;font-size:15px;font-weight:500;">{cta}</a>
+        <div style="margin-top:28px;padding-top:20px;border-top:1px solid #f0f0f0;">
+          <p style="font-size:13px;color:#888;margin:0 0 6px;">Or copy this link into your browser:</p>
+          <p style="font-size:12px;color:#aaa;word-break:break-all;margin:0;font-family:monospace;background:#f9f9f9;padding:10px 12px;border-radius:6px;">{link}</p>
+        </div>
+      </td></tr>
+      <tr><td style="padding:16px 32px;background:#fafafa;border-top:1px solid #f0f0f0;">
+        <p style="font-size:12px;color:#aaa;margin:0;">If you didn't request this, you can safely ignore this email.</p>
+      </td></tr>
+    </table>
+    </td></tr></table>
+    </body></html>
+        "#,
+            label = label,
+            heading = heading,
+            body = body,
+            cta = cta,
+            link = link
+        )
+    }
+
     async fn send_mail(
         response_type: ResponseType,
         user_email: &str,
         raw_token: &str,
     ) -> Result<(), VeloxError> {
         let resend_api_key = Utils::load_env("RESEND_API_KEY")?;
-
         let resend = resend_rs::Resend::new(&resend_api_key);
-
         let from = "Velox <onboarding@resend.dev>";
         let to = [user_email];
-
         let subject = match response_type {
-            ResponseType::LogIn => "Your vortex login link",
+            ResponseType::LogIn => "Your velox login link",
             ResponseType::SignIn => "Welcome to Velox - verify your email",
         };
-
         let frontend_url = Utils::load_env("FRONTEND_URL")?;
-
-        let email = CreateEmailBaseOptions::new(from, to, subject).with_html(&format!(
-            "<strong>Click <a href='{}/auth/authorize?token={}'>here</a> to verify</strong>",
-            frontend_url, raw_token
-        ));
-
+        let email = CreateEmailBaseOptions::new(from, to, subject).with_html(
+            &AuthService::magic_link_html(&frontend_url, raw_token, &response_type),
+        );
         let _email = resend
             .emails
             .send(email)
             .await
             .map_err(|_| VeloxError::EmailError)?;
-
         Ok(())
     }
 

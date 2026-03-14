@@ -4,4 +4,4 @@ delete file (done)
 add max 1gb limit (done)
 share file
 in auth system refresh delete the old refresh token and generate new one on each call this prevents what if attacker steals user refresh token ?
-optimize the code take care of all TODOs
+optimize the code take care of all TODOs (done)
