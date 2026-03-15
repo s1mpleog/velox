@@ -189,12 +189,9 @@ impl AuthService {
         } else {
             tracing::info!("user does not exists");
             MagicTokenRepository::delete_by_email(&mut tx, email).await?;
-
             TempUserRepository::upsert(&mut tx, email).await?;
-
             MagicTokenRepository::insert(&mut tx, &token_sha256, email, ResponseType::SignIn)
                 .await?;
-
             AuthService::send_mail(ResponseType::SignIn, email, &token).await?;
             tracing::info!("sent email successfully");
         }
@@ -279,8 +276,6 @@ impl AuthService {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
         let hashed_refresh_token = AuthService::generate_sha256(raw_refresh_token);
 
-        // TODO: cycle refresh token delete older one and generate new each time
-
         let refresh_token_data =
             RefreshTokenRepository::find_by_token(&mut tx, &hashed_refresh_token)
                 .await?
@@ -299,6 +294,8 @@ impl AuthService {
 
         RefreshTokenRepository::delete_by_token(&mut tx, &refresh_token_data.token).await?;
 
+        tracing::info!("Deleted old refresh token");
+
         let refresh_token = AuthService::generate_random_token();
         let hashed_refresh_token = AuthService::generate_sha256(&refresh_token);
 
@@ -316,6 +313,8 @@ impl AuthService {
         let hashed_refresh_token = AuthService::generate_sha256(raw_refresh_token);
 
         RefreshTokenRepository::delete_by_token(&mut tx, &hashed_refresh_token).await?;
+
+        tracing::info!("successfully deleted refresh token");
 
         tx.commit().await.map_err(VeloxError::SqlxError)?;
 

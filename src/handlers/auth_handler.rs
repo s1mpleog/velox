@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
-use cookie::Cookie;
+use cookie::{Cookie, SameSite};
 
 use crate::{app_state::AppState, dto, error::VeloxError, services::auth_service::AuthService};
 
@@ -123,15 +123,29 @@ impl AuthHandler {
         let refresh_token = jar.get("refresh_token").ok_or(VeloxError::AuthError)?;
         let refresh_token_to_string = refresh_token.value().to_string();
 
+        tracing::info!("refresh token: {refresh_token_to_string}");
+
         tracing::info!("fetched refresh token successfully");
 
         AuthService::logout(&state.pool, &refresh_token_to_string).await?;
 
-        tracing::info!("login service ran successfully");
+        tracing::info!("logout service ran successfully");
 
-        let jar = jar
-            .remove(Cookie::from("access_token"))
-            .remove(Cookie::from("refresh_token"));
+        let removal_cookie = Cookie::build(Cookie::from("refresh_token"))
+            .path("/")
+            .http_only(true)
+            .secure(true)
+            .same_site(SameSite::Strict);
+
+        let removal_access = Cookie::build(Cookie::from("access_token"))
+            .path("/")
+            .http_only(true)
+            .secure(true)
+            .same_site(SameSite::Strict);
+
+        let jar = jar.remove(removal_cookie).remove(removal_access);
+
+        // tracing::debug!("{:?}", jar);
 
         tracing::info!("deleted cookies successfully");
 

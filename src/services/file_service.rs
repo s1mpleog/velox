@@ -35,8 +35,6 @@ impl FileService {
     ) -> Result<(), VeloxError> {
         let mut tx = pool.begin().await.map_err(VeloxError::SqlxError)?;
 
-        tracing::debug!("files count: {}", files.len());
-
         // TODO: premium user can get 2GB limit
         let total_used = FileRepository::get_total_storage(&mut tx, user_id).await?;
 

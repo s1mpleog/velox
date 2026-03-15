@@ -1,6 +1,6 @@
 use axum::{Router, middleware};
 
-use axum::routing::{get, post};
+use axum::routing::get;
 
 use crate::app_state::AppState;
 use crate::handlers::user_handler::UserHandler;
