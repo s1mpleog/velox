@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method};
 use axum::routing::get;
@@ -5,6 +7,7 @@ use axum::{Json, Router};
 use serde_json::json;
 use tower_http::cors::CorsLayer;
 
+use crate::repositories::postgres_repository::user_repository::PostgresUserRepository;
 use crate::storage::init_r2;
 use crate::{error::VeloxError, utils::Utils};
 
@@ -37,7 +40,11 @@ async fn main() -> Result<(), VeloxError> {
 
     let r2 = init_r2().await?;
 
-    let app_state = app_state::AppState { pool, r2 };
+    let app_state = app_state::AppState {
+        pool: pool.clone(),
+        r2,
+        user_repo: Arc::new(PostgresUserRepository::new(pool.clone())),
+    };
 
     let frontend_url = Utils::load_env("FRONTEND_URL")
         .map_err(|_| VeloxError::EnvError("failed to load frontend url".to_string()))?;

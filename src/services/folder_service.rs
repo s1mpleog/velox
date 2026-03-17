@@ -8,6 +8,8 @@ use crate::{
     repositories::{file_repository::FileRepository, folder_repository::FolderRepository},
 };
 
+// TODO: remove tx from places where its not required
+
 pub struct FolderService {}
 
 impl FolderService {
