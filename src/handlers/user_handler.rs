@@ -16,7 +16,7 @@ impl UserHandler {
         Extension(user_id): Extension<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
         // let user = UserService::get_current(&*state.user_repo, &user_id).await?;
-        let user = UserService::get_current(state.user_repo.as_ref(), &user_id).await?;
+        let user = UserService::get_current(&state.pool, &user_id).await?;
         Ok((StatusCode::OK, Json(user)))
     }
 
@@ -24,7 +24,7 @@ impl UserHandler {
         State(state): State<AppState>,
         Path(user_id): Path<Uuid>,
     ) -> Result<impl IntoResponse, VeloxError> {
-        let user = UserService::find_by_id(state.user_repo.as_ref(), &user_id).await?;
+        let user = UserService::find_by_id(&state.pool, &user_id).await?;
 
         Ok((StatusCode::OK, Json(user)))
     }
